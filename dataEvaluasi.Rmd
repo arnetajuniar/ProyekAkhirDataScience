@@ -1,0 +1,126 @@
+---
+title: "dataEvaluasi"
+author: "Arneta"
+date: "2022-11-29"
+output: html_document
+---
+
+```{r}
+library(dplyr)      # manipulasi data
+library(readxl)     # membaca file excel
+library(here)       # set directory file dataset
+library(Amelia)     # cek missing value
+library(e1071)      # naive bayes
+library(caret)      # confusion matrix
+library(shiny)      # GUI
+
+data_eval <- read_excel(here("dataset", "DATASET DATA EVALUASI TINGKAT PERKEMBANGAN DESA .xlsx"))
+glimpse(data_eval)
+head(data_eval)
+```
+
+
+```{r}
+data_eval2 <- data_eval %>% select(`BIDANG PEMERINTAHAN`, `BIDANG KEWILAYAHAN`, `BIDANG KEMASYARAKATAN`, `TINGKAT PERKEMBANGAN`)
+data_eval2
+```
+
+```{r}
+unique(data_eval2$`TINGKAT PERKEMBANGAN`)
+
+data_eval2$`TINGKAT PERKEMBANGAN` <- as.factor(data_eval2$`TINGKAT PERKEMBANGAN`)
+str(data_eval2)
+```
+
+```{r}
+# cek missing value
+missmap(data_eval2)
+```
+
+```{r}
+sampel <- sample(1:nrow(data_eval2), 0.75*nrow(data_eval2))
+training <- data.frame(data_eval2)[sampel,]
+testing <- data.frame(data_eval2)[-sampel,]
+training
+testing
+```
+
+```{r}
+model <- naiveBayes(`TINGKAT.PERKEMBANGAN` ~., data = training)
+model
+```
+
+
+```{r}
+prediksi <- predict(model, testing)
+prediksi
+```
+
+```{r}
+cm <- confusionMatrix(table(prediksi, testing$TINGKAT.PERKEMBANGAN))
+cm
+```
+
+```{r}
+#dataBaru <- read.delim("clipboard")
+View(dataBaru)
+```
+
+```{r}
+prediksi1 <- predict(model, dataBaru)
+df <- data.frame(prediksi1)
+df
+```
+```{r}
+dataAcehSelatan <- data_eval %>% slice(1:15) %>% select(`KAB/KOTA`, `TINGKAT PERKEMBANGAN`)
+df2 <- cbind(dataAcehSelatan, df)
+df2
+```
+
+```{r}
+ui <- fluidPage(
+  titlePanel("DATA ANALISIS TINGKAT PERKEMBANGAN DESA DI INDONESIA TAHUN 2021"),
+  mainPanel(
+    tabsetPanel(type = "tabs",
+                tabPanel("Data", DT::dataTableOutput("table")),
+                tabPanel("Accuracy Analysis", textOutput("accuracy"),
+                         tags$head(tags$style("#accuracy{font-size: 40px}"))),
+                tabPanel("Bidang Pemerintahan", plotOutput("plot1")),
+                tabPanel("Bidang Kewilayahan", plotOutput("plot2")),
+                tabPanel("Bidang Kemasyarakatan", plotOutput("plot3")),        
+                )
+    )
+  )
+
+server <- function(input, output, session){
+  
+  output$table <- DT::renderDataTable({
+    DT::datatable(data_eval, options = list(lengthChange = FALSE))
+  })
+  
+  output$accuracy <- renderText({
+    accuracy <- cm$overall['Accuracy']
+    paste(toString(floor(accuracy * 100)), "%", sep = "")
+  })
+  
+  output$plot1 <- renderPlot({
+    ggplot(data_eval2, aes(`BIDANG PEMERINTAHAN`, colour = `TINGKAT PERKEMBANGAN`)) +
+    geom_freqpoly(binwidth = 1) + labs(title="Distribusi Nilai Bidang Pemerintahan Berdasarkan Tingkat Perkembangan")
+  }, height=500)
+  
+  output$plot2 <- renderPlot({
+    ggplot(data_eval2, aes(`BIDANG KEWILAYAHAN`, colour = `TINGKAT PERKEMBANGAN`)) +
+    geom_freqpoly(binwidth = 1) + labs(title="Distribusi Nilai Bidang Kewilayahan Berdasarkan Tingkat Perkembangan")
+  }, height=500)
+  
+  output$plot3 <- renderPlot({
+    ggplot(data_eval2, aes(`BIDANG KEMASYARAKATAN`, colour = `TINGKAT PERKEMBANGAN`)) +
+    geom_freqpoly(binwidth = 1) + labs(title="Distribusi Nilai Bidang Kemasyarakatan Berdasarkan Tingkat Perkembangan")
+  }, height=500)
+}
+```
+
+```{r}
+shinyApp(ui = ui, server = server)
+```
+
